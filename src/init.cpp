@@ -566,9 +566,8 @@ void CleanupBlockRevFiles()
     }
 }
 
-void ThreadImport(std::vector<boost::filesystem::path> vImportFiles)
+void ThreadImport(std::vector<boost::filesystem::path> vImportFiles, const CChainParams& chainparams)
 {
-    const CChainParams& chainparams = Params();
     RenameThread("bitcoin-loadblk");
     CImportingNow imp;
 
@@ -941,8 +940,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             return InitError(AmountErrMsg("minrelaytxfee", mapArgs["-minrelaytxfee"]));
     }
 
-    fRequireStandard = !GetBoolArg("-acceptnonstdtxn", !Params().RequireStandard());
-    if (Params().RequireStandard() && !fRequireStandard)
+    fRequireStandard = !GetBoolArg("-acceptnonstdtxn", !chainparams.RequireStandard());
+    if (chainparams.RequireStandard() && !fRequireStandard)
         return InitError(strprintf("acceptnonstdtxn is not currently supported for %s chain", chainparams.NetworkIDString()));
     nBytesPerSigOp = GetArg("-bytespersigop", nBytesPerSigOp);
 
@@ -1254,7 +1253,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                         CleanupBlockRevFiles();
                 }
 
-                if (!LoadBlockIndex()) {
+                if (!LoadBlockIndex(chainparams)) {
                     strLoadError = _("Error loading block database");
                     break;
                 }
@@ -1388,7 +1387,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         BOOST_FOREACH(const std::string& strFile, mapMultiArgs["-loadblock"])
             vImportFiles.push_back(strFile);
     }
-    threadGroup.create_thread(boost::bind(&ThreadImport, vImportFiles));
+    threadGroup.create_thread(boost::bind(&ThreadImport, vImportFiles, chainparams));
 
     // Wait for genesis block to be processed
     bool fHaveGenesis = false;
@@ -1426,7 +1425,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     StartNode(threadGroup, scheduler);
 
     // Monitor the chain, and alert if we get blocks much quicker or slower than expected
-    int64_t nPowTargetSpacing = Params().GetConsensus().nPowTargetSpacing;
+    int64_t nPowTargetSpacing = chainparams.GetConsensus().nPowTargetSpacing;
     CScheduler::Function f = boost::bind(&PartitionCheck, &IsInitialBlockDownload,
                                          boost::ref(cs_main), boost::cref(pindexBestHeader), nPowTargetSpacing);
     scheduler.scheduleEvery(f, nPowTargetSpacing);
